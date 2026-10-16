@@ -97,7 +97,7 @@ export const ColorSelector: React.FC<ColorSelectorProps> = ({
       </div>
 
       {/* Swatches Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-[220px] overflow-y-auto pr-1 no-scrollbar">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 overflow-y-auto pr-1 no-scrollbar sm:max-h-[220px]">
         {filteredColors.map((color) => {
           const isSelected = selectedColor.id === color.id;
           return (

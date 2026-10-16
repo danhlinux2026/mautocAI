@@ -166,7 +166,7 @@ export const HairSelector: React.FC<HairSelectorProps> = ({
       </div>
 
       {/* Hairstyles Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-[380px] overflow-y-auto pr-1 no-scrollbar">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 overflow-y-auto pr-1 no-scrollbar sm:max-h-[380px]">
         {filteredStyles.map((style) => {
           const isSelected = selectedStyle.id === style.id;
           const isBestForFace = detectedFaceShape

@@ -2,8 +2,8 @@ import React from 'react';
 import { Sparkles, Scissors, UserCheck, LayoutGrid, Layers, Cpu, Settings } from 'lucide-react';
 
 interface NavbarProps {
-  activeTab: 'studio' | 'analyzer' | 'compare' | 'gallery';
-  setActiveTab: (tab: 'studio' | 'analyzer' | 'compare' | 'gallery') => void;
+  activeTab: 'studio' | 'compare';
+  setActiveTab: (tab: 'studio' | 'compare') => void;
   gender: 'female' | 'male';
   setGender: (gender: 'female' | 'male') => void;
   savedLooksCount: number;
@@ -55,35 +55,6 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <Scissors className="w-3.5 h-3.5" />
             <span>Thử Tóc (Studio)</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('analyzer')}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition-all ${
-              activeTab === 'analyzer'
-                ? 'bg-rose-600 text-white shadow-md shadow-rose-900/40'
-                : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800/60'
-            }`}
-          >
-            <UserCheck className="w-3.5 h-3.5" />
-            <span>Tư Vấn Khuôn Mặt</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('gallery')}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition-all relative ${
-              activeTab === 'gallery'
-                ? 'bg-rose-600 text-white shadow-md shadow-rose-900/40'
-                : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800/60'
-            }`}
-          >
-            <LayoutGrid className="w-3.5 h-3.5" />
-            <span>Bộ Sưu Tập</span>
-            {savedLooksCount > 0 && (
-              <span className="w-4 h-4 bg-amber-500 text-stone-950 font-bold text-[10px] rounded-full flex items-center justify-center ml-0.5">
-                {savedLooksCount}
-              </span>
-            )}
           </button>
         </nav>
 

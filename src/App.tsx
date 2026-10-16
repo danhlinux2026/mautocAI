@@ -2,10 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   HAIRSTYLES,
   HAIR_COLORS,
-  SAMPLE_MODELS,
   Hairstyle,
   HairColor,
-  SampleModel,
 } from './data/hairStyles';
 import {
   renderHairColorSimulation,
@@ -14,7 +12,6 @@ import {
 } from './utils/hairCanvas';
 import { renderCompleteHairMakeover } from './utils/hairSynthesis';
 import { autoCropToPortrait } from './utils/faceCrop';
-import { FaceAnalysisResult, FaceBox } from '../server/geminiService';
 import { AgnesConfig } from '../server/agnesService';
 import { Navbar } from './components/Navbar';
 import { BeforeAfterSlider } from './components/BeforeAfterSlider';
@@ -46,7 +43,7 @@ import {
 
 export default function App() {
   // Navigation & Gender
-  const [activeTab, setActiveTab] = useState<'studio' | 'analyzer' | 'compare' | 'gallery'>('studio');
+  const [activeTab, setActiveTab] = useState<'studio' | 'compare' | 'gallery'>('studio');
   const [gender, setGender] = useState<'female' | 'male'>('female');
 
   // Framing Mode: 'portrait' (auto-cropped close-up on face) vs 'original' (full wide view)
@@ -71,13 +68,11 @@ export default function App() {
 
   const [isAgnesModalOpen, setIsAgnesModalOpen] = useState(false);
 
-  // Raw original uploaded image (could be landscape / cafe photo)
-  const defaultModel = SAMPLE_MODELS[0];
-  const [rawOriginalImage, setRawOriginalImage] = useState<string>(defaultModel.imageUrl);
+  const placeholderImage = 'https://images.unsplash.com/photo-1595152772835-219674b2a0a6?auto=format&fit=crop&w=800&q=80';
+  const [rawOriginalImage, setRawOriginalImage] = useState<string>(placeholderImage);
   
   // Current active working image (usually auto-cropped portrait)
-  const [currentImage, setCurrentImage] = useState<string>(defaultModel.imageUrl);
-  const [detectedFaceBox, setDetectedFaceBox] = useState<FaceBox | undefined>(undefined);
+  const [currentImage, setCurrentImage] = useState<string>(placeholderImage);
 
   const [selectedStyle, setSelectedStyle] = useState<Hairstyle>(HAIRSTYLES[0]);
   const [selectedColor, setSelectedColor] = useState<HairColor>(HAIR_COLORS[2]); // Chestnut brown default
@@ -88,12 +83,8 @@ export default function App() {
     brightness: 5,
   });
 
-  const [simulatedImage, setSimulatedImage] = useState<string>(defaultModel.imageUrl);
+  const [simulatedImage, setSimulatedImage] = useState<string>(placeholderImage);
   const [isProcessingCanvas, setIsProcessingCanvas] = useState<boolean>(false);
-
-  // Auto Face Detection state (Requested by user: tự nhận diện được khuôn mặt khi tải ảnh lên)
-  const [isScanningFace, setIsScanningFace] = useState<boolean>(true);
-  const [faceAnalysis, setFaceAnalysis] = useState<FaceAnalysisResult | null>(null);
 
   // Deep AI Transformation (Agnes AI / Gemini server API)
   const [isTransformingAI, setIsTransformingAI] = useState<boolean>(false);
@@ -102,9 +93,6 @@ export default function App() {
     cuttingTechnique: string;
     maintenanceGuide: string;
   } | null>(null);
-
-  // Face Analysis Modal
-  const [isFaceAnalyzerOpen, setIsFaceAnalyzerOpen] = useState<boolean>(false);
 
   // Modals
   const [isCameraOpen, setIsCameraOpen] = useState<boolean>(false);
@@ -135,13 +123,8 @@ export default function App() {
     showToast(`Đã chuyển động cơ tạo mẫu sang: ${eng === 'agnes' ? 'Agnes AI' : eng === 'gemini' ? 'Gemini AI' : 'Canvas Siêu Tốc'}`);
   };
 
-  // Switch default model when gender changes
+  // Switch default style when gender changes
   useEffect(() => {
-    const matchingModel = SAMPLE_MODELS.find((m) => m.gender === gender);
-    if (matchingModel && rawOriginalImage.includes('unsplash.com')) {
-      setRawOriginalImage(matchingModel.imageUrl);
-      setCurrentImage(matchingModel.imageUrl);
-    }
     const matchingStyle = HAIRSTYLES.find((h) => h.gender === gender || h.gender === 'unisex');
     if (matchingStyle) {
       setSelectedStyle(matchingStyle);
@@ -152,74 +135,30 @@ export default function App() {
   // When rawOriginalImage changes or framing options change, automatically generate centered portrait
   const updatePortraitCropping = useCallback(async (
     rawImg: string,
-    box?: FaceBox,
     mode: 'portrait' | 'original' = framingMode,
     zoom = portraitZoom,
     offsetY = portraitOffsetY
-  ) => {
+  ): Promise<string | undefined> => {
     if (mode === 'original') {
       setCurrentImage(rawImg);
-      return;
+      return rawImg;
     }
 
     try {
-      const { portraitUrl, computedBox } = await autoCropToPortrait(rawImg, {
-        faceBox: box,
+      const { portraitUrl } = await autoCropToPortrait(rawImg, {
         zoom,
         offsetY,
       });
       setCurrentImage(portraitUrl);
-      if (computedBox) {
-        setDetectedFaceBox(computedBox);
-      }
+      return portraitUrl;
     } catch (err) {
       console.warn('Lỗi auto crop chân dung:', err);
       setCurrentImage(rawImg);
+      return rawImg;
     }
   }, [framingMode, portraitZoom, portraitOffsetY]);
 
   // AUTO-DETECT FACE: Triggered whenever a new photo is uploaded, captured, or selected
-  const autoDetectFace = useCallback(async (rawImg: string) => {
-    try {
-      setIsScanningFace(true);
-      const res = await fetch('/api/analyze-face', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: rawImg }),
-      });
-
-      if (res.ok) {
-        const data: FaceAnalysisResult = await res.json();
-        setFaceAnalysis(data);
-        if (data.faceBox) {
-          setDetectedFaceBox(data.faceBox);
-          // Crop portrait using the exact faceBox from AI
-          await updatePortraitCropping(rawImg, data.faceBox, 'portrait');
-        }
-        showToast(`AI tự động nhận diện: ${data.faceShape} (${data.confidence}% khớp)!`);
-      }
-    } catch (err) {
-      console.warn('Lỗi nhận diện khuôn mặt tự động:', err);
-      // Fallback detection
-      setFaceAnalysis({
-        faceShape: 'Mặt trái xoan (Oval)',
-        faceShapeEnglish: 'Oval',
-        confidence: 94,
-        faceBox: { topPercent: 18, leftPercent: 30, widthPercent: 40, heightPercent: 46 },
-        characteristics: ['Tỷ lệ cân đối', 'Quai hàm mềm mại', 'Trán thanh tú'],
-        skinTone: 'Sáng tự nhiên',
-        undertone: 'Warm',
-        recommendedStyles: [
-          { name: 'Tóc Layer Hàn Quốc', englishName: 'Korean Layer', reason: 'Tôn vinh tối đa xương quai hàm', suitabilityScore: 98 },
-        ],
-        stylesToAvoid: [],
-        recommendedColors: [],
-        stylistTips: ['Sấy phồng chân tóc tạo độ bay bổng tự nhiên'],
-      });
-    } finally {
-      setTimeout(() => setIsScanningFace(false), 1200);
-    }
-  }, [updatePortraitCropping]);
 
   // Handle local photo upload: Immediately crop to portrait and scan face!
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -236,14 +175,16 @@ export default function App() {
       if (event.target?.result) {
         const base64 = event.target.result as string;
         setRawOriginalImage(base64);
-        setFaceAnalysis(null);
-        showToast('Đã nhận ảnh! AI đang tự động nhận diện & cắt khung chân dung...');
+        showToast('Đã nhận ảnh! Đang cắt khung chân dung...');
 
         // 1. Immediately create an initial centered portrait crop
-        await updatePortraitCropping(base64, undefined, 'portrait');
-
-        // 2. Run AI face detection in background
-        autoDetectFace(base64);
+        const portraitUrl = await updatePortraitCropping(base64, 'portrait');
+        
+        // 2. Automatically save the new upload to collection
+        if (portraitUrl) {
+          saveLook(portraitUrl, base64, 'Ảnh tải lên', 'Uploaded', 'N/A', '#000000');
+          showToast('Ảnh đã được tự động lưu vào bộ sưu tập!');
+        }
       }
     };
     reader.readAsDataURL(file);
@@ -253,6 +194,9 @@ export default function App() {
   useEffect(() => {
     let isCancelled = false;
     const runSimulation = async () => {
+      // Safety check: Ensure DOM is available
+      if (typeof document === 'undefined') return;
+      
       try {
         setIsProcessingCanvas(true);
         const resultUrl = await renderCompleteHairMakeover({
@@ -260,7 +204,6 @@ export default function App() {
           style: selectedStyle,
           color: selectedColor,
           options: simulationOptions,
-          faceBox: detectedFaceBox,
           hairVolume: 1.0,
         });
         if (!isCancelled) {
@@ -269,6 +212,7 @@ export default function App() {
       } catch (err) {
         console.error('Canvas simulation error:', err);
         if (!isCancelled) {
+          // Graceful fallback: set to original image
           setSimulatedImage(currentImage);
         }
       } finally {
@@ -282,7 +226,7 @@ export default function App() {
     return () => {
       isCancelled = true;
     };
-  }, [currentImage, selectedStyle, selectedColor, simulationOptions, detectedFaceBox]);
+  }, [currentImage, selectedStyle, selectedColor, simulationOptions]);
 
   // Deep AI Hair Transformation (via Agnes AI or Gemini)
   const handleAITransformation = async () => {
@@ -318,6 +262,15 @@ export default function App() {
 
       if (data.generatedImageUrl) {
         setSimulatedImage(data.generatedImageUrl);
+        // Automatically save the AI generated look to collection
+        saveLook(
+          data.generatedImageUrl,
+          currentImage,
+          selectedStyle.name,
+          selectedStyle.englishName,
+          selectedColor.name,
+          selectedColor.hex
+        );
       }
       setAiRecipe({
         hairRecipe: data.hairRecipe,
@@ -340,20 +293,40 @@ export default function App() {
     }
   };
 
-  // Save look to comparison
-  const handleSaveToComparison = () => {
+  // Generic function to save a look to the collection
+  const saveLook = (
+    imageUrl: string,
+    originalImageUrl: string,
+    styleName: string,
+    styleEnglishName: string,
+    colorName: string,
+    colorHex: string
+  ) => {
     const newLook: SavedLook = {
-      id: `${selectedStyle.id}-${selectedColor.id}-${Date.now()}`,
+      id: `${styleName}-${colorName}-${Date.now()}`,
       timestamp: Date.now(),
-      styleName: selectedStyle.name,
-      styleEnglishName: selectedStyle.englishName,
-      colorName: selectedColor.name,
-      colorHex: selectedColor.hex,
-      imageUrl: simulatedImage,
-      originalImageUrl: currentImage,
+      styleName,
+      styleEnglishName,
+      colorName,
+      colorHex,
+      imageUrl,
+      originalImageUrl,
     };
 
     setSavedLooks((prev) => [newLook, ...prev]);
+    return newLook;
+  };
+
+  // Save look to comparison
+  const handleSaveToComparison = () => {
+    saveLook(
+      simulatedImage,
+      currentImage,
+      selectedStyle.name,
+      selectedStyle.englishName,
+      selectedColor.name,
+      selectedColor.hex
+    );
     showToast(`Đã lưu "${selectedStyle.name}" vào bảng so sánh!`);
   };
 
@@ -368,7 +341,7 @@ export default function App() {
         styleEnglishName: selectedStyle.englishName,
         colorName: selectedColor.name,
         colorHex: selectedColor.hex,
-        faceShape: faceAnalysis?.faceShape || 'Trái xoan chuẩn',
+        faceShape: 'Trái xoan chuẩn',
         hairRecipe: aiRecipe?.hairRecipe || `Tone nền Level 6-7, ánh sắc ${selectedColor.name}.`,
         cuttingTechnique: aiRecipe?.cuttingTechnique || `Form cắt ${selectedStyle.name}, tỉa tầng so le tạo độ bay bổng tự nhiên.`,
         maintenanceGuide: aiRecipe?.maintenanceGuide || 'Gội xả bằng dầu dưỡng ẩm, sấy phồng chân tóc tạo độ bồng bềnh.',
@@ -384,22 +357,19 @@ export default function App() {
     }
   };
 
-  // Apply recommended style from face analyzer
-  const handleApplyRecommendedStyle = (styleName: string) => {
-    const found = HAIRSTYLES.find(
-      (h) => h.name.toLowerCase().includes(styleName.toLowerCase()) || styleName.toLowerCase().includes(h.name.toLowerCase())
-    );
-    if (found) {
-      setSelectedStyle(found);
-      showToast(`Đã chọn kiểu tóc phù hợp: ${found.name}`);
-    } else {
-      showToast(`Đã lưu gợi ý: ${styleName}`);
-    }
-  };
 
   return (
     <div className="min-h-screen bg-stone-950 text-stone-100 flex flex-col font-['Plus_Jakarta_Sans',sans-serif]">
       {/* Toast Notification */}
+      <style>{`
+        div#root:nth-of-type(1) > div:nth-of-type(1) > main:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(4) {
+          display: none !important;
+        }
+        div#root:nth-of-type(1) > div:nth-of-type(1) > main:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(1) > span:nth-of-type(2),
+        div#root:nth-of-type(1) > div:nth-of-type(1) > main:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(1) > span:nth-of-type(1) {
+          display: none !important;
+        }
+      `}</style>
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 bg-rose-600 text-white px-4 py-2.5 rounded-2xl shadow-2xl flex items-center gap-2 text-xs font-bold border border-rose-400/40 max-w-sm">
           <CheckCircle2 className="w-4 h-4 shrink-0" />
@@ -410,7 +380,7 @@ export default function App() {
       {/* Top Navbar */}
       <Navbar
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        setActiveTab={(tab: 'studio' | 'compare' | 'gallery') => setActiveTab(tab)}
         gender={gender}
         setGender={setGender}
         savedLooksCount={savedLooks.length}
@@ -460,7 +430,7 @@ export default function App() {
                   <button
                     onClick={() => {
                       setFramingMode('portrait');
-                      updatePortraitCropping(rawOriginalImage, detectedFaceBox, 'portrait');
+                      updatePortraitCropping(rawOriginalImage, 'portrait');
                       showToast('Đã chuyển sang khung Chân Dung cận cảnh!');
                     }}
                     className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 ${
@@ -491,13 +461,7 @@ export default function App() {
                   />
 
                   {/* Auto Face Landmark Scanning Overlay (Clean & Accurately Aligned) */}
-                  <FaceDetectionOverlay
-                    isScanning={isScanningFace}
-                    detectedFaceShape={faceAnalysis?.faceShape}
-                    confidence={faceAnalysis?.confidence}
-                    faceBox={detectedFaceBox}
-                    gender={gender}
-                  />
+                  {/* Face Detection Overlay removed */}
                 </div>
 
                 {/* AI Hair Generation Loading Indicator - positioned cleanly without blocking hair/face */}
@@ -591,47 +555,6 @@ export default function App() {
             {/* Right Column: Hairstyles & Hair Colors Pickers (5 Cols) */}
             <div className="lg:col-span-5 flex flex-col gap-6">
               {/* Sample Models Bar */}
-              <div className="p-4 rounded-2xl bg-stone-900/60 border border-stone-800 flex flex-col gap-2.5">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-stone-200 uppercase tracking-wider">
-                    Mẫu Ảnh Chân Dung Có Sẵn
-                  </span>
-                  <span className="text-[11px] text-stone-400">Thử nhanh không cần ảnh</span>
-                </div>
-
-                <div className="grid grid-cols-5 gap-2">
-                  {SAMPLE_MODELS.map((model) => {
-                    const isSelected = rawOriginalImage === model.imageUrl;
-                    return (
-                      <button
-                        key={model.id}
-                        onClick={() => {
-                          setRawOriginalImage(model.imageUrl);
-                          setCurrentImage(model.imageUrl);
-                          setGender(model.gender);
-                          setFaceAnalysis(null);
-                          showToast(`Đã chọn mẫu: ${model.name}`);
-                        }}
-                        className={`group relative rounded-xl overflow-hidden aspect-square border-2 transition-all ${
-                          isSelected
-                            ? 'border-rose-500 ring-2 ring-rose-500/40 shadow-lg'
-                            : 'border-stone-800 hover:border-stone-600'
-                        }`}
-                        title={model.name}
-                      >
-                        <img
-                          src={model.imageUrl}
-                          alt={model.name}
-                          className="w-full h-full object-cover group-hover:scale-110 transition-transform"
-                        />
-                        <div className="absolute inset-x-0 bottom-0 bg-black/70 py-0.5 text-[8px] text-center text-stone-200 truncate px-0.5">
-                          {model.gender === 'female' ? 'Nữ' : 'Nam'}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
 
               {/* Hairstyle Selection Component */}
               <div className="p-4 rounded-2xl bg-stone-900/70 border border-stone-800">
@@ -640,7 +563,6 @@ export default function App() {
                   selectedStyle={selectedStyle}
                   onSelectStyle={(style) => setSelectedStyle(style)}
                   gender={gender}
-                  detectedFaceShape={faceAnalysis?.faceShape}
                 />
               </div>
 
@@ -661,130 +583,6 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 2: AI FACE ANALYZER FULL VIEW */}
-        {activeTab === 'analyzer' && (
-          <div className="max-w-4xl mx-auto flex flex-col gap-6 animate-fadeIn">
-            <div className="p-6 rounded-3xl bg-stone-900 border border-stone-800 shadow-2xl flex flex-col md:flex-row items-center gap-6">
-              <div className="w-48 h-64 rounded-2xl overflow-hidden bg-black shrink-0 border border-stone-800 shadow-xl relative">
-                <img src={currentImage} alt="Current face" className="w-full h-full object-cover" />
-                <FaceDetectionOverlay
-                  isScanning={isScanningFace}
-                  detectedFaceShape={faceAnalysis?.faceShape}
-                  confidence={faceAnalysis?.confidence}
-                  faceBox={detectedFaceBox}
-                  gender={gender}
-                />
-              </div>
-
-              <div className="flex-1 flex flex-col gap-3">
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-bold w-fit">
-                  <UserCheck className="w-3.5 h-3.5" />
-                  <span>Trí Tuệ Nhân Tạo Nhận Diện Nhân Trắc Học</span>
-                </div>
-                <h2 className="text-2xl font-bold text-stone-100 font-serif-display">
-                  Tư Vấn Dáng Mặt & Tỷ Lệ Vàng
-                </h2>
-                <p className="text-xs text-stone-300 leading-relaxed">
-                  Hệ thống AI tự động quét nhận diện các góc độ cằm, gò má, trán và sắc tố da để xác định chuẩn xác hình dáng khuôn mặt và đề xuất kiểu tóc giúp tôn vinh nhan sắc đỉnh cao.
-                </p>
-
-                <div className="flex items-center gap-3 pt-2">
-                  <button
-                    onClick={() => autoDetectFace(rawOriginalImage)}
-                    disabled={isScanningFace}
-                    className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white text-xs font-bold flex items-center gap-2 transition-all shadow-lg shadow-rose-950/40"
-                  >
-                    <Sparkles className="w-4 h-4" />
-                    <span>Quét Lại Bằng AI</span>
-                  </button>
-
-                  <button
-                    onClick={() => setActiveTab('studio')}
-                    className="px-4 py-2.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 text-xs font-medium transition-colors"
-                  >
-                    Quay Lại Studio Thử Tóc
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Render Face Analysis Details */}
-            {faceAnalysis && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                <div className="p-5 rounded-2xl bg-stone-900 border border-stone-800 flex flex-col gap-2">
-                  <span className="text-xs text-stone-400 font-medium">Hình Dáng Khuôn Mặt</span>
-                  <span className="text-2xl font-bold text-rose-400 font-serif-display">
-                    {faceAnalysis.faceShape}
-                  </span>
-                  <span className="text-xs text-stone-400">
-                    {faceAnalysis.faceShapeEnglish} • Độ chính xác {faceAnalysis.confidence}%
-                  </span>
-                  <div className="mt-2 pt-2 border-t border-stone-800 text-xs text-stone-300 space-y-1">
-                    {faceAnalysis.characteristics.map((c, i) => (
-                      <div key={i} className="flex items-start gap-1.5">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
-                        <span>{c}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="p-5 rounded-2xl bg-stone-900 border border-stone-800 flex flex-col gap-2">
-                  <span className="text-xs text-stone-400 font-medium">Sắc Tố Làn Da</span>
-                  <span className="text-xl font-bold text-amber-300 font-serif-display">
-                    {faceAnalysis.skinTone}
-                  </span>
-                  <span className="text-xs text-stone-400">
-                    Undertone: <strong className="text-stone-200">{faceAnalysis.undertone}</strong>
-                  </span>
-                  <div className="mt-3 pt-2 border-t border-stone-800 flex flex-col gap-2">
-                    <span className="text-xs font-semibold text-stone-200">Gợi ý màu nhuộm sáng da:</span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {faceAnalysis.recommendedColors.map((col, i) => (
-                        <span
-                          key={i}
-                          className="px-2 py-1 rounded-lg bg-stone-950 text-[11px] text-stone-300 flex items-center gap-1.5 border border-stone-800"
-                        >
-                          <span
-                            className="w-2.5 h-2.5 rounded-full inline-block"
-                            style={{ backgroundColor: col.hex }}
-                          />
-                          {col.name}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="p-5 rounded-2xl bg-stone-900 border border-stone-800 flex flex-col gap-2">
-                  <span className="text-xs text-stone-400 font-medium">Kiểu Tóc Hợp Nhất</span>
-                  <div className="flex flex-col gap-2 mt-1">
-                    {faceAnalysis.recommendedStyles.map((style, i) => (
-                      <div
-                        key={i}
-                        className="p-2.5 rounded-xl bg-stone-950 border border-stone-800/80 flex items-center justify-between gap-2"
-                      >
-                        <div className="flex flex-col">
-                          <span className="text-xs font-bold text-stone-200">{style.name}</span>
-                          <span className="text-[10px] text-emerald-400 font-medium">{style.suitabilityScore}% hợp</span>
-                        </div>
-                        <button
-                          onClick={() => {
-                            handleApplyRecommendedStyle(style.name);
-                            setActiveTab('studio');
-                          }}
-                          className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-semibold transition-colors"
-                        >
-                          Thử
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
 
         {/* TAB 3: MULTI-LOOK COMPARISON */}
         {activeTab === 'compare' && (
@@ -889,24 +687,14 @@ export default function App() {
       </footer>
 
       {/* Modals */}
-      <FaceAnalyzerModal
-        isOpen={isFaceAnalyzerOpen}
-        onClose={() => setIsFaceAnalyzerOpen(false)}
-        isLoading={isScanningFace}
-        analysisResult={faceAnalysis}
-        onApplyRecommendedStyle={handleApplyRecommendedStyle}
-        availableStyles={HAIRSTYLES}
-      />
 
       <CameraCaptureModal
         isOpen={isCameraOpen}
         onClose={() => setIsCameraOpen(false)}
         onCapture={async (base64) => {
           setRawOriginalImage(base64);
-          setFaceAnalysis(null);
-          showToast('Đang nhận diện & lấy khung chân dung cận cảnh...');
-          await updatePortraitCropping(base64, undefined, 'portrait');
-          autoDetectFace(base64);
+          showToast('Đang cắt khung chân dung cận cảnh...');
+          await updatePortraitCropping(base64, 'portrait');
         }}
       />
 

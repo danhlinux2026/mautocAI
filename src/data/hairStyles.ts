@@ -37,57 +37,6 @@ export interface HairColor {
   description: string;
 }
 
-export interface SampleModel {
-  id: string;
-  name: string;
-  gender: 'female' | 'male';
-  faceShape: string;
-  imageUrl: string;
-  description: string;
-}
-
-export const SAMPLE_MODELS: SampleModel[] = [
-  {
-    id: 'model-female-1',
-    name: 'Mai Anh (Mặt Trái Xoan)',
-    gender: 'female',
-    faceShape: 'Trái xoan (Oval)',
-    imageUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80',
-    description: 'Khuôn mặt cân đối, đường nét mềm mại lý tưởng cho mọi kiểu tóc.',
-  },
-  {
-    id: 'model-female-2',
-    name: 'Minh Thư (Mặt Tròn)',
-    gender: 'female',
-    faceShape: 'Mặt tròn (Round)',
-    imageUrl: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=800&q=80',
-    description: 'Gương mặt bầu bĩnh đáng yêu, thích hợp kiểu tóc dài tỉa layer ôm góc mặt.',
-  },
-  {
-    id: 'model-female-3',
-    name: 'Elena (Mặt Vuông / Góc Cạnh)',
-    gender: 'female',
-    faceShape: 'Mặt vuông (Square)',
-    imageUrl: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=800&q=80',
-    description: 'Xương hàm sắc sảo cá tính, tôn dáng với sóng lơi mềm hoặc mái bay.',
-  },
-  {
-    id: 'model-male-1',
-    name: 'Tuấn Kiệt (Mặt Kim Cương)',
-    gender: 'male',
-    faceShape: 'Kim cương (Diamond)',
-    imageUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=800&q=80',
-    description: 'Gò má cao và cằm góc cạnh, hợp kiểu Side Part rủ hoặc Textured Crop.',
-  },
-  {
-    id: 'model-male-2',
-    name: 'David (Mặt Chữ Điền / Vuông)',
-    gender: 'male',
-    faceShape: 'Mặt vuông (Square)',
-    imageUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=800&q=80',
-    description: 'Quai hàm nam tính mạnh mẽ, cực kỳ tôn nét với Undercut, Quiff hoặc Ivy League.',
-  },
-];
 
 export const HAIRSTYLES: Hairstyle[] = [
   // 1. TÓC LAYER HÀN QUỐC
