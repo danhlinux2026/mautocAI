@@ -1,0 +1,6 @@
+{
+  "name": "AI Hair Style Simulator",
+  "description": "Trình giả lập và tư vấn kiểu tóc AI thông minh - Thử ngay các kiểu tóc nam, nữ, màu nhuộm thời thượng và phân tích khuôn mặt để tìm phong cách tóc hoàn hảo.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
